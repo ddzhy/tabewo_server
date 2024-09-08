@@ -4,7 +4,8 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-
+const multer = require('multer');
+const path = require('path');
 
 
 const app = express();
@@ -13,14 +14,26 @@ const app = express();
 const PORT = process.env.PORT || 8081;
 
 app.use(cors({
-    origin: ["http://localhost:3000"],
-    methods: ["POST", "GET", "OPTION"],
+    origin: 'http://localhost:3000',
     credentials: true
-}))
+}));
 app.use(express.json());
 app.use(cookieParser());
 
 app.get("/", (req, res) => res.send("express on 잘생긴 나호윤"));
+app.use('/uploads', express.static('uploads')); // 정적 파일 경로
+
+// Multer 설정
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname)); // 파일 이름 설정
+    }
+});
+
+const upload = multer({ storage: storage });
 
 const db = mysql.createConnection({
     host: "bksiznx43rtgocveooqs-mysql.services.clever-cloud.com",
@@ -37,22 +50,22 @@ db.connect((err) => {
     console.log('Connected to MySQL database');
 });
 
-// JWT 검증 미들웨어 함수
 const verifyUser = (req, res, next) => {
-    const token = req.cookies.token;
+    const token = req.cookies.token; // 쿠키에서 토큰을 가져옴
     if (!token) {
         return res.json({ error: "You are not authenticated" });
-    } else {
-        jwt.verify(token, "jwt-secret-key", (err, decoded) => {
-            if (err) {
-                return res.json({ error: "Invalid token" });
-            } else {
-                req.user = decoded;
-                next();
-            }
-        });
     }
+
+    jwt.verify(token, "jwt-secret-key", (err, decoded) => {
+        if (err) {
+            return res.json({ error: "Invalid token" });
+        }
+
+        req.user = decoded;  // 유저 정보를 request 객체에 저장
+        next();  // 다음 미들웨어로 이동
+    });
 };
+
 
 // 회원가입 엔드포인트
 app.post('/signup', (req, res) => {
@@ -93,7 +106,10 @@ app.post('/login', (req, res) => {
                     const name = data[0].name;
                     const email = data[0].email;
                     const token = jwt.sign({ name, email }, "jwt-secret-key", { expiresIn: '1d' });
-                    res.cookie('token', token, { httpOnly: true });
+                    res.cookie('token', token, {
+                        httpOnly: true,
+                    });
+                    
                     return res.json("Success");
                 } else {
                     return res.json("Invalid password");
@@ -118,6 +134,59 @@ app.get('/mypage', verifyUser, (req, res) => {
     return res.json({ status: "Success", name: user.name, email: user.email });
 });
 
+
+
+app.get("/api/get", (req, res) => {
+    const sqlQuery = "SELECT * FROM board;";
+    db.query(sqlQuery, (err, result) => {
+        res.send(result);
+    })
+})
+
+
+app.delete("/api/delete/:id", (req, res) => {
+    const id = req.params.id;
+    const sqlQuery = "DELETE FROM board WHERE id = ?";
+    db.query(sqlQuery, id, (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            res.send('Deleted successfully');
+        }
+    });
+});
+
+app.put("/api/update", (req, res) => {
+    const id = req.body.id;
+    const title = req.body.title;
+    const content = req.body.content;
+    const sqlQuery = "UPDATE board SET title = ?, content = ? WHERE id = ?";
+    db.query(sqlQuery, [title, content, id], (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            res.send('Updated successfully');
+        }
+    });
+});
+
+// 게시물 업로드 엔드포인트
+app.post("/api/insert", upload.single('image'), (req, res) => {
+    const title = req.body.title;
+    const content = req.body.content;
+    const date = req.body.date;
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const sqlQuery = "INSERT INTO board (title, content, date, image) VALUES (?,?,?,?)";
+    db.query(sqlQuery, [title, content, date, imagePath], (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            res.send('succ');
+        }
+    });
+});
+
 app.listen(PORT, () => {
     console.log('Listening on port', PORT);
-});
+})
