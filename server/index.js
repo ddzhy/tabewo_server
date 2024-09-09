@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 8081;
 
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: 'https://tabewo-client.vercel.app/',
     credentials: true
 }))
 app.use(express.json());
@@ -107,7 +107,7 @@ app.post('/login', (req, res) => {
                     const email = data[0].email;
                     const token = jwt.sign({ name, email }, "jwt-secret-key", { expiresIn: '1d' });
                     res.cookie('token', token, {
-                        httpOnly: true,
+                        secure: true,
                     });
                     
                     return res.json("Success");
