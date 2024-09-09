@@ -110,6 +110,7 @@ app.post('/login', (req, res) => {
                     res.cookie('token', token, {
                         secure: true, // => deploy
                         // httpOnly: true => develop
+                        sameSite: 'None'
                     });
                     
                     return res.json("Success");
